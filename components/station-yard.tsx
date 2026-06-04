@@ -6,6 +6,7 @@ import {
   SWITCHES,
   SEGMENTS,
   THROAT_LINKS,
+  OUTDOOR_EQUIPMENT,
   TRACK_TARGETS,
   ROUTES,
   SIGNAL_COLORS,
@@ -15,7 +16,7 @@ import {
 } from "@/lib/interlocking-data"
 
 const SEG_COLOR = {
-  free: "#4b5563", // 空闲 灰
+  free: "#8a96a8", // 空闲 灰
   locked: "#ffd60a", // 锁闭 黄
   occupied: "#ff3b30", // 占用 红
 } as const
@@ -46,13 +47,16 @@ export function StationYard() {
   const trainPose = train && trainRoute ? pointAt(trainRoute.trainPath, train.t) : null
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-[#0b1220]">
+    <div className="relative h-full w-full overflow-hidden rounded-md border border-cyan-400/25 bg-[#07101d] shadow-[inset_0_0_0_1px_rgba(15,23,42,0.8),0_18px_40px_rgba(0,0,0,0.34)]">
       {/* 站场标题 */}
-      <div className="pointer-events-none absolute left-4 top-3 z-10 font-mono text-xs tracking-widest text-cyan-300/80">
+      <div className="pointer-events-none absolute left-4 top-3 z-10 rounded border border-cyan-400/20 bg-[#081827]/85 px-2.5 py-1 font-mono text-xs tracking-widest text-cyan-200">
         中心站 · 咽喉区站场图
       </div>
+      <div className="pointer-events-none absolute bottom-3 right-4 z-10 rounded border border-slate-500/25 bg-[#081827]/85 px-2.5 py-1 font-mono text-[11px] text-slate-300">
+        灰=空闲 黄=锁闭 红=占用
+      </div>
       {state.selectedSignal && (
-        <div className="pointer-events-none absolute right-4 top-3 z-10 animate-pulse font-mono text-xs text-amber-300">
+        <div className="pointer-events-none absolute right-4 top-3 z-10 animate-pulse rounded border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 font-mono text-xs text-amber-200">
           已选始端：{SIGNALS.find((s) => s.id === state.selectedSignal)?.label} — 请点击终端
         </div>
       )}
@@ -60,7 +64,7 @@ export function StationYard() {
       <svg viewBox="0 0 1200 440" className="h-full w-full" preserveAspectRatio="xMidYMid meet">
         <defs>
           <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M40 0H0V40" fill="none" stroke="#13203a" strokeWidth="1" />
+            <path d="M40 0H0V40" fill="none" stroke="#102033" strokeWidth="0.8" />
           </pattern>
           <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="3.2" result="b" />
@@ -71,7 +75,8 @@ export function StationYard() {
           </filter>
         </defs>
 
-        <rect x="0" y="0" width="1200" height="440" fill="url(#grid)" />
+        <rect x="0" y="0" width="1200" height="440" fill="#07101d" />
+        <rect x="0" y="0" width="1200" height="440" fill="url(#grid)" opacity="0.65" />
 
         {/* 咽喉连接线（轨道骨架） */}
         {THROAT_LINKS.map((pts, i) => (
@@ -79,8 +84,8 @@ export function StationYard() {
             key={i}
             points={pts.map((p) => `${p.x},${p.y}`).join(" ")}
             fill="none"
-            stroke="#2b3a55"
-            strokeWidth="6"
+            stroke="#586577"
+            strokeWidth="7"
             strokeLinecap="round"
           />
         ))}
@@ -95,7 +100,7 @@ export function StationYard() {
                 points={seg.path.map((p) => `${p.x},${p.y}`).join(" ")}
                 fill="none"
                 stroke={color}
-                strokeWidth={st === "occupied" ? 9 : 7}
+                strokeWidth={st === "occupied" ? 10 : 8}
                 strokeLinecap="round"
                 className="transition-[stroke] duration-300"
                 style={st === "occupied" ? { filter: "url(#glow)" } : undefined}
@@ -106,14 +111,19 @@ export function StationYard() {
                 y={seg.labelPos.y}
                 textAnchor="middle"
                 className="font-mono"
-                fontSize="11"
-                fill={st === "free" ? "#64748b" : color}
+                fontSize="13"
+                fill={st === "free" ? "#cbd5e1" : color}
               >
                 {seg.label}
               </text>
             </g>
           )
         })}
+
+        {/* 室外辅助设备与边界标识 */}
+        {OUTDOOR_EQUIPMENT.map((eq) => (
+          <OutdoorEquipment key={eq.id} eq={eq} />
+        ))}
 
         {/* 股道终端可点击区域 */}
         {state.selectedSignal &&
@@ -171,9 +181,9 @@ export function StationYard() {
                 x={sw.pivot.x}
                 y={sw.pivot.y - 12}
                 textAnchor="middle"
-                fontSize="11"
+                fontSize="13"
                 className="font-mono"
-                fill="#cbd5e1"
+                fill="#f8fafc"
               >
                 {sw.label}
               </text>
@@ -192,6 +202,7 @@ export function StationYard() {
             key={sig.id}
             sig={sig}
             aspect={state.aspects[sig.id]}
+            wireBroken={state.signalWireBroken[sig.id]}
             selected={state.selectedSignal === sig.id}
             onClick={() => dispatch({ type: "CLICK_SIGNAL", id: sig.id })}
           />
@@ -207,15 +218,17 @@ export function StationYard() {
 function SignalMast({
   sig,
   aspect,
+  wireBroken,
   selected,
   onClick,
 }: {
   sig: SignalDef
   aspect: Aspect
+  wireBroken: boolean
   selected: boolean
   onClick: () => void
 }) {
-  const lamps = aspectLamps(aspect)
+  const lamps = wireBroken ? [SIGNAL_COLORS.off] : aspectLamps(aspect)
   const dir = sig.facing === "right" ? 1 : -1
   const small = sig.kind === "shunt"
   const r = small ? 5 : 6
@@ -237,7 +250,7 @@ function SignalMast({
           <g key={i}>
             <circle cx={cx} cy={sig.pos.y} r={r + 2} fill="#0b1220" stroke="#1e293b" strokeWidth="1" />
             <circle cx={cx} cy={sig.pos.y} r={r} fill={c} style={{ filter: "url(#glow)" }}>
-              {(aspect === "red-white" && i === 0) || aspect === "white" ? (
+              {!wireBroken && ((aspect === "red-white" && i === 0) || aspect === "white") ? (
                 <animate attributeName="opacity" values="1;0.35;1" dur="1s" repeatCount="indefinite" />
               ) : null}
             </circle>
@@ -254,6 +267,79 @@ function SignalMast({
         fill={sig.kind === "shunt" ? "#cbd5e1" : "#e2e8f0"}
       >
         {sig.label}
+      </text>
+      {wireBroken && (
+        <g>
+          <line x1={sig.pos.x - 14} y1={sig.pos.y - 14} x2={sig.pos.x + 14} y2={sig.pos.y + 14} stroke="#ff3b30" strokeWidth="3" />
+          <line x1={sig.pos.x + 14} y1={sig.pos.y - 14} x2={sig.pos.x - 14} y2={sig.pos.y + 14} stroke="#ff3b30" strokeWidth="3" />
+          <text x={sig.pos.x} y={sig.pos.y + 32} textAnchor="middle" fontSize="10" fill="#ff8a80">
+            断丝
+          </text>
+        </g>
+      )}
+    </g>
+  )
+}
+
+function OutdoorEquipment({
+  eq,
+}: {
+  eq: {
+    id: string
+    label: string
+    kind: "boundary" | "safety-line" | "derailer" | "marker" | "wire-broken"
+    pos: { x: number; y: number }
+    path?: { x: number; y: number }[]
+  }
+}) {
+  if (eq.kind === "safety-line" && eq.path) {
+    const start = eq.path[0]
+    return (
+      <g>
+        <polyline
+          points={eq.path.map((p) => `${p.x},${p.y}`).join(" ")}
+          fill="none"
+          stroke="#b28b4c"
+          strokeWidth="6"
+          strokeLinecap="round"
+        />
+        <line x1={start.x} y1={start.y - 16} x2={start.x} y2={start.y + 16} stroke="#b28b4c" strokeWidth="5" />
+        <line x1={start.x + 18} y1={start.y - 13} x2={start.x + 18} y2={start.y + 13} stroke="#b28b4c" strokeWidth="4" />
+        <text x={eq.pos.x} y={eq.pos.y - 12} textAnchor="middle" fontSize="13" fill="#f8fafc">
+          {eq.label}
+        </text>
+      </g>
+    )
+  }
+
+  if (eq.kind === "derailer") {
+    return (
+      <g>
+        <circle cx={eq.pos.x} cy={eq.pos.y - 12} r="9" fill="#0b1220" stroke="#e2e8f0" strokeWidth="3" />
+        <text x={eq.pos.x} y={eq.pos.y + 10} textAnchor="middle" fontSize="12" fill="#f8fafc">
+          {eq.label}
+        </text>
+      </g>
+    )
+  }
+
+  if (eq.kind === "wire-broken") {
+    return (
+      <g opacity="0.85">
+        <line x1={eq.pos.x - 16} y1={eq.pos.y + 12} x2={eq.pos.x + 18} y2={eq.pos.y - 18} stroke="#94a3b8" strokeWidth="2" />
+        <line x1={eq.pos.x - 6} y1={eq.pos.y - 4} x2={eq.pos.x + 4} y2={eq.pos.y + 4} stroke="#ff3b30" strokeWidth="3" />
+        <text x={eq.pos.x + 34} y={eq.pos.y - 8} textAnchor="middle" fontSize="11" fill="#cbd5e1">
+          {eq.label}仿真
+        </text>
+      </g>
+    )
+  }
+
+  return (
+    <g>
+      <rect x={eq.pos.x - 12} y={eq.pos.y - 12} width="24" height="24" rx="2" fill="#0b1220" stroke="#cbd5e1" strokeWidth="3" />
+      <text x={eq.pos.x} y={eq.pos.y + 30} textAnchor="middle" fontSize="12" fill="#f8fafc">
+        {eq.label}
       </text>
     </g>
   )

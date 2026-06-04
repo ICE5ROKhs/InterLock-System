@@ -10,7 +10,15 @@ import {
   type RouteDef,
 } from "@/lib/interlocking-data"
 
-export type OpMode = "route" | "single-op" | "single-lock" | "single-unlock" | "block" | "unblock"
+export type OpMode =
+  | "route"
+  | "single-op"
+  | "single-lock"
+  | "single-unlock"
+  | "block"
+  | "unblock"
+  | "signal-break"
+  | "signal-repair"
 
 export type SegState = "free" | "locked" | "occupied"
 
@@ -20,6 +28,7 @@ export interface ActiveRoute {
   name: string
   kind: "train" | "shunt"
   segments: string[]
+  switches: string[]
   approached: boolean
 }
 
@@ -35,6 +44,7 @@ interface State {
   switchPos: Record<string, "normal" | "reverse">
   switchLocked: Record<string, boolean>
   switchBlocked: Record<string, boolean>
+  signalWireBroken: Record<string, boolean>
   segs: Record<string, SegState>
   selectedSignal: string | null
   selectedSwitch: string | null
@@ -66,7 +76,9 @@ type Action =
 
 function initState(): State {
   const aspects: Record<string, Aspect> = {}
+  const signalWireBroken: Record<string, boolean> = {}
   SIGNALS.forEach((s) => (aspects[s.id] = s.defaultAspect))
+  SIGNALS.forEach((s) => (signalWireBroken[s.id] = false))
   const switchPos: Record<string, "normal" | "reverse"> = {}
   const switchLocked: Record<string, boolean> = {}
   const switchBlocked: Record<string, boolean> = {}
@@ -82,6 +94,7 @@ function initState(): State {
     switchPos,
     switchLocked,
     switchBlocked,
+    signalWireBroken,
     segs,
     selectedSignal: null,
     selectedSwitch: null,
@@ -113,6 +126,9 @@ function log(state: State, text: string, level: LogMsg["level"]): State {
 }
 
 function tryBuildRoute(state: State, route: RouteDef): State {
+  if (state.signalWireBroken[route.from]) {
+    return log(state, `建立失败：始端信号机 ${route.from} 发生断丝，禁止开放信号。`, "error")
+  }
   // 区段空闲检查
   const occupied = route.segments.find((id) => state.segs[id] !== "free")
   if (occupied) {
@@ -141,6 +157,7 @@ function tryBuildRoute(state: State, route: RouteDef): State {
     name: route.name,
     kind: route.kind,
     segments: route.segments,
+    switches: route.switches.map((sw) => sw.id),
     approached: false,
   }
   let next: State = {
@@ -186,6 +203,31 @@ function reducer(state: State, action: Action): State {
       )
 
     case "CLICK_SIGNAL": {
+      if (state.opMode === "signal-break") {
+        const aspects = { ...state.aspects }
+        aspects[action.id] = SIGNALS.find((s) => s.id === action.id)?.defaultAspect ?? "red"
+        return log(
+          {
+            ...state,
+            aspects,
+            signalWireBroken: { ...state.signalWireBroken, [action.id]: true },
+            selectedSignal: null,
+          },
+          `信号机 ${action.id} 已设置断丝故障，灯位熄灭并禁止开放。`,
+          "warn",
+        )
+      }
+      if (state.opMode === "signal-repair") {
+        return log(
+          {
+            ...state,
+            signalWireBroken: { ...state.signalWireBroken, [action.id]: false },
+            selectedSignal: null,
+          },
+          `信号机 ${action.id} 断丝故障已恢复。`,
+          "ok",
+        )
+      }
       if (state.opMode !== "route") return state
       if (state.selectedSignal === action.id) {
         return log({ ...state, selectedSignal: null }, "已取消始端选择。", "info")
@@ -216,11 +258,8 @@ function reducer(state: State, action: Action): State {
         case "single-op": {
           if (state.switchBlocked[id]) return log(state, `道岔 ${labelOfSwitch(id)} 已封锁，单操无效。`, "error")
           if (state.switchLocked[id]) return log(state, `道岔 ${labelOfSwitch(id)} 已单锁，请先单解。`, "error")
-          const inRoute = state.activeRoutes.some((r) =>
-            findRoute(r.from, r.id.split("-")[1] ?? "")?.switches.some((s) => s.id === id),
-          )
-          const segLocked = Object.values(state.segs).some((v) => v !== "free")
-          if (inRoute && segLocked) return log(state, `道岔 ${labelOfSwitch(id)} 在锁闭进路内，禁止单操。`, "error")
+          const inRoute = state.activeRoutes.some((r) => r.switches.includes(id))
+          if (inRoute) return log(state, `道岔 ${labelOfSwitch(id)} 在锁闭进路内，禁止单操。`, "error")
           const target = state.switchPos[id] === "normal" ? "reverse" : "normal"
           return log(
             { ...state, movingSwitch: id },
@@ -393,6 +432,8 @@ function modeLabel(m: OpMode) {
       "single-unlock": "单解",
       block: "封锁",
       unblock: "解封",
+      "signal-break": "信号断丝",
+      "signal-repair": "恢复信号",
     } as Record<OpMode, string>
   )[m]
 }

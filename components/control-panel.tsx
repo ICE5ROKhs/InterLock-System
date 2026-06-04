@@ -23,8 +23,13 @@ export function ControlPanel() {
     { label: "解封", mode: "unblock" },
   ]
 
+  const signalModes: { label: string; mode: OpMode }[] = [
+    { label: "断丝", mode: "signal-break" },
+    { label: "恢复信号", mode: "signal-repair" },
+  ]
+
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto">
+    <div className="flex h-full flex-col gap-3 overflow-y-auto rounded-md border border-cyan-400/20 bg-[#081827] p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.8)]">
       {/* 进路 / 模式 */}
       <Panel title="操作模式">
         <div className="grid grid-cols-1 gap-2">
@@ -34,7 +39,7 @@ export function ControlPanel() {
         </div>
         <button
           onClick={() => dispatch({ type: "RUN_TRAIN" })}
-          className="mt-1 w-full rounded-md bg-cyan-500 py-2.5 text-sm font-semibold text-[#06121f] shadow-lg shadow-cyan-500/20 transition-all hover:bg-cyan-400 active:scale-[0.98]"
+          className="mt-1 w-full rounded bg-cyan-400 py-3 text-sm font-bold text-[#06121f] shadow-[0_0_18px_rgba(34,211,238,0.32)] transition-all hover:bg-cyan-300 active:scale-[0.98]"
         >
           ▶ 模拟列车运行
         </button>
@@ -48,12 +53,12 @@ export function ControlPanel() {
               key={b.label}
               onClick={b.action}
               className={cn(
-                "rounded-md border px-2 py-2.5 text-sm font-medium transition-all active:scale-[0.97]",
+                "rounded border px-2 py-2.5 text-sm font-semibold transition-all active:scale-[0.97]",
                 b.tone === "danger"
                   ? "border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20"
                   : b.tone === "warn"
-                    ? "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
-                    : "border-border bg-secondary/60 text-foreground hover:bg-secondary",
+                    ? "border-amber-400/45 bg-amber-400/10 text-amber-200 hover:bg-amber-400/18"
+                    : "border-slate-500/35 bg-slate-900/70 text-slate-100 hover:border-cyan-300/45 hover:bg-slate-800",
               )}
             >
               {b.label}
@@ -76,6 +81,20 @@ export function ControlPanel() {
         </p>
       </Panel>
 
+      {/* 信号设备故障仿真 */}
+      <Panel title="信号设备仿真（选模式后点击信号机）">
+        <div className="grid grid-cols-2 gap-2">
+          {signalModes.map((m) => (
+            <ModeBtn key={m.mode} active={state.opMode === m.mode} onClick={() => dispatch({ type: "SET_MODE", mode: m.mode })}>
+              {m.label}
+            </ModeBtn>
+          ))}
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          断丝：灯位熄灭并阻止信号开放 · 恢复后可重新办理进路
+        </p>
+      </Panel>
+
       {/* 当前活动进路 */}
       <Panel title={`活动进路（${state.activeRoutes.length}）`}>
         {state.activeRoutes.length === 0 ? (
@@ -85,9 +104,9 @@ export function ControlPanel() {
             {state.activeRoutes.map((r) => (
               <li
                 key={r.id}
-                className="flex items-center justify-between rounded-md border border-border bg-secondary/40 px-2.5 py-1.5 text-xs"
+                className="flex items-center justify-between rounded border border-slate-600/50 bg-slate-950/60 px-2.5 py-1.5 text-xs"
               >
-                <span className="text-foreground">{r.name}</span>
+                <span className="text-slate-100">{r.name}</span>
                 <span
                   className={cn(
                     "rounded px-1.5 py-0.5 font-mono text-[10px]",
@@ -107,8 +126,8 @@ export function ControlPanel() {
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-border bg-card/40 p-3">
-      <h3 className="mb-2.5 font-mono text-xs uppercase tracking-wider text-cyan-300/70">{title}</h3>
+    <section className="rounded-md border border-slate-600/45 bg-[#0c1f34] p-3">
+      <h3 className="mb-2.5 border-l-2 border-cyan-300 pl-2 font-mono text-xs uppercase tracking-wider text-cyan-200">{title}</h3>
       <div className="flex flex-col gap-2">{children}</div>
     </section>
   )
@@ -127,10 +146,10 @@ function ModeBtn({
     <button
       onClick={onClick}
       className={cn(
-        "rounded-md border px-2 py-2 text-sm font-medium transition-all active:scale-[0.97]",
+        "rounded border px-2 py-2 text-sm font-semibold transition-all active:scale-[0.97]",
         active
-          ? "border-cyan-400 bg-cyan-500/15 text-cyan-200 shadow-[0_0_0_1px_rgba(34,211,238,0.4)]"
-          : "border-border bg-secondary/60 text-foreground hover:bg-secondary",
+          ? "border-cyan-300 bg-cyan-400/18 text-cyan-100 shadow-[0_0_0_1px_rgba(34,211,238,0.35)]"
+          : "border-slate-500/35 bg-slate-950/55 text-slate-100 hover:border-cyan-300/45 hover:bg-slate-800",
       )}
     >
       {children}

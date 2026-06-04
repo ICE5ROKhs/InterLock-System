@@ -7,11 +7,11 @@ import { TitleBar } from "@/components/title-bar"
 export default function Page() {
   return (
     <InterlockingProvider>
-      <main className="flex h-screen flex-col gap-3 bg-[#070d18] p-3 text-foreground">
+      <main className="flex min-h-screen flex-col gap-3 bg-[#07111f] p-3 text-slate-100 lg:h-screen">
         <TitleBar />
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1fr_320px]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1fr_340px]">
           {/* 左侧：站场图 + 信息区 */}
-          <div className="grid min-h-0 grid-rows-[1fr_230px] gap-3">
+          <div className="grid min-h-0 grid-rows-[minmax(360px,440px)_minmax(220px,auto)] gap-3 lg:grid-rows-[1fr_220px]">
             <StationYard />
             <InfoPanel />
           </div>
