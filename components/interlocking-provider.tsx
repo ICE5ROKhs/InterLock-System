@@ -9,6 +9,7 @@ import {
   type Aspect,
   type RouteDef,
 } from "@/lib/interlocking-data"
+import { VALIDATION_GUIDE_STEPS } from "@/lib/validation-guide"
 
 export type OpMode =
   | "route"
@@ -53,6 +54,7 @@ interface State {
   messages: LogMsg[]
   countdown: { routeId: string; remain: number } | null
   train: { routeId: string; t: number; running: boolean } | null
+  validationGuide: { active: boolean; step: number; passed: Record<number, boolean> }
   movingSwitch: string | null
   msgSeq: number
 }
@@ -72,6 +74,12 @@ type Action =
   | { type: "TRAIN_TICK"; t: number }
   | { type: "SWITCH_SETTLE"; id: string; pos: "normal" | "reverse" }
   | { type: "COUNTDOWN_TICK" }
+  | { type: "GUIDE_START" }
+  | { type: "GUIDE_PREPARE" }
+  | { type: "GUIDE_NEXT" }
+  | { type: "GUIDE_PREV" }
+  | { type: "GUIDE_STOP" }
+  | { type: "GUIDE_CHECK" }
   | { type: "LOG"; text: string; level: LogMsg["level"] }
 
 function initState(): State {
@@ -110,6 +118,7 @@ function initState(): State {
     ],
     countdown: null,
     train: null,
+    validationGuide: { active: false, step: 0, passed: {} },
     movingSwitch: null,
     msgSeq: 1,
   }
@@ -189,6 +198,51 @@ function aspectLabel(a: Aspect) {
       blue: "蓝灯",
     } as Record<Aspect, string>
   )[a]
+}
+
+function sameSegState(a: Record<string, SegState>, b: Record<string, SegState>) {
+  return Object.keys(b).every((id) => a[id] === b[id])
+}
+
+function hasRecentMessage(state: State, text: string) {
+  return state.messages.some((m) => m.text.includes(text))
+}
+
+function evaluateGuideStep(state: State) {
+  if (!state.validationGuide.active) return false
+  const guide = VALIDATION_GUIDE_STEPS[state.validationGuide.step]
+  if (!guide) return false
+
+  switch (guide.successKind) {
+    case "station-visible":
+      return true
+    case "train-route-built":
+      return state.activeRoutes.some((r) => r.kind === "train" && r.from === "X")
+    case "shunt-route-built":
+      return state.activeRoutes.some((r) => r.kind === "shunt")
+    case "switch-moved":
+      return state.movingSwitch === "W5" || state.switchPos.W5 !== "normal"
+    case "dynamic-display":
+      return !!state.train || Object.values(state.segs).some((s) => s === "occupied")
+    case "manual-release-countdown":
+      return !!state.countdown
+    case "train-process":
+      return state.activeRoutes.some((r) => r.kind === "train") || hasRecentMessage(state, "列车已通过")
+    case "shunt-process":
+      return state.activeRoutes.some((r) => r.kind === "shunt") || (!!state.train && state.activeRoutes.some((r) => r.kind === "shunt"))
+    case "cancel-or-manual-release":
+      return hasRecentMessage(state, "已总取消") || !!state.countdown
+    case "switch-protection":
+      return Object.values(state.switchLocked).some(Boolean) || Object.values(state.switchBlocked).some(Boolean) || hasRecentMessage(state, "建立失败")
+    case "route-unlocked":
+      return hasRecentMessage(state, "进路已解锁") || hasRecentMessage(state, "列车已通过")
+    case "signal-wire":
+      return Object.values(state.signalWireBroken).some(Boolean) || hasRecentMessage(state, "断丝故障")
+    case "switch-simulation":
+      return !!state.movingSwitch || Object.values(state.switchPos).some((p) => p !== "normal")
+    case "track-occupancy":
+      return Object.values(state.segs).some((s) => s === "occupied") || hasRecentMessage(state, "区段逐段出清")
+  }
 }
 
 function reducer(state: State, action: Action): State {
@@ -342,6 +396,53 @@ function reducer(state: State, action: Action): State {
       )
     }
 
+    case "GUIDE_START":
+      return log({ ...state, validationGuide: { active: true, step: 0, passed: {} } }, "已进入『验收引导模式』，请按提示逐项演示。", "info")
+
+    case "GUIDE_PREPARE": {
+      const currentStep = Math.min(state.validationGuide.step, VALIDATION_GUIDE_STEPS.length - 1)
+      const guide = VALIDATION_GUIDE_STEPS[currentStep]
+      const fresh = initState()
+      const passed = { ...state.validationGuide.passed }
+      delete passed[currentStep]
+      return log(
+        {
+          ...fresh,
+          messages: state.messages,
+          msgSeq: state.msgSeq,
+          validationGuide: { active: true, step: currentStep, passed },
+          opMode: guide.prepareMode ?? "route",
+        },
+        `已为第 ${currentStep + 1} 项准备：${guide.title}。上一项状态已清理，避免验收项互相影响。`,
+        "ok",
+      )
+    }
+
+    case "GUIDE_NEXT": {
+      const nextStep = Math.min(state.validationGuide.step + 1, VALIDATION_GUIDE_STEPS.length - 1)
+      return log({ ...state, validationGuide: { ...state.validationGuide, active: true, step: nextStep } }, `验收引导：第 ${nextStep + 1} 项。`, "info")
+    }
+
+    case "GUIDE_PREV": {
+      const prevStep = Math.max(state.validationGuide.step - 1, 0)
+      return log({ ...state, validationGuide: { ...state.validationGuide, active: true, step: prevStep } }, `验收引导：返回第 ${prevStep + 1} 项。`, "info")
+    }
+
+    case "GUIDE_STOP":
+      return log({ ...state, validationGuide: { active: false, step: 0, passed: {} } }, "已退出验收引导模式。", "info")
+
+    case "GUIDE_CHECK": {
+      if (!state.validationGuide.active || state.validationGuide.passed[state.validationGuide.step]) return state
+      if (!evaluateGuideStep(state)) return state
+      const step = state.validationGuide.step
+      const guide = VALIDATION_GUIDE_STEPS[step]
+      return log(
+        { ...state, validationGuide: { ...state.validationGuide, passed: { ...state.validationGuide.passed, [step]: true } } },
+        `演示成功：第 ${step + 1} 项『${guide.title}』已满足验收条件。`,
+        "ok",
+      )
+    }
+
     case "RUN_TRAIN": {
       if (state.train) return log(state, "已有列车正在运行，请等待其出清。", "warn")
       const route = state.activeRoutes.find((r) => !r.approached) ?? state.activeRoutes[0]
@@ -389,7 +490,7 @@ function reducer(state: State, action: Action): State {
         else if (i === idx) segs[id] = "occupied"
         else segs[id] = "locked"
       })
-      return { ...state, train: { ...state.train, t }, segs }
+      return { ...state, train: { ...state.train, t }, segs: sameSegState(state.segs, segs) ? state.segs : segs }
     }
 
     case "ALL_NORMAL": {
@@ -496,6 +597,11 @@ export function InterlockingProvider({ children }: { children: ReactNode }) {
     const t = setInterval(() => dispatch({ type: "COUNTDOWN_TICK" }), 1000)
     return () => clearInterval(t)
   }, [countdownActive])
+
+  useEffect(() => {
+    if (!state.validationGuide.active || state.validationGuide.passed[state.validationGuide.step]) return
+    dispatch({ type: "GUIDE_CHECK" })
+  }, [state])
 
   return <InterlockingContext.Provider value={{ state, dispatch }}>{children}</InterlockingContext.Provider>
 }

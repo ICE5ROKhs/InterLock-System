@@ -14,6 +14,7 @@ import {
   type Aspect,
   type SignalDef,
 } from "@/lib/interlocking-data"
+import { VALIDATION_GUIDE_STEPS } from "@/lib/validation-guide"
 
 const SEG_COLOR = {
   free: "#8a96a8", // 空闲 灰
@@ -45,6 +46,11 @@ export function StationYard() {
   const train = state.train
   const trainRoute = train ? ROUTES.find((r) => r.id === train.routeId) : null
   const trainPose = train && trainRoute ? pointAt(trainRoute.trainPath, train.t) : null
+  const guideStep = state.validationGuide.active ? VALIDATION_GUIDE_STEPS[state.validationGuide.step] : null
+  const guideSegments = new Set(guideStep?.segmentIds ?? [])
+  const guideSignals = new Set(guideStep?.signalIds ?? [])
+  const guideSwitches = new Set(guideStep?.switchIds ?? [])
+  const guideTargets = new Set(guideStep?.targetIds ?? [])
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-md border border-cyan-400/25 bg-[#07101d] shadow-[inset_0_0_0_1px_rgba(15,23,42,0.8),0_18px_40px_rgba(0,0,0,0.34)]">
@@ -94,16 +100,26 @@ export function StationYard() {
         {SEGMENTS.map((seg) => {
           const st = state.segs[seg.id]
           const color = SEG_COLOR[st]
+          const guided = guideSegments.has(seg.id)
           return (
             <g key={seg.id}>
+              {guided && (
+                <polyline
+                  points={seg.path.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill="none"
+                  stroke="#34d399"
+                  strokeWidth="22"
+                  strokeLinecap="round"
+                  opacity="0.28"
+                  className="guide-target-pulse animate-pulse"
+                />
+              )}
               <polyline
                 points={seg.path.map((p) => `${p.x},${p.y}`).join(" ")}
                 fill="none"
                 stroke={color}
                 strokeWidth={st === "occupied" ? 10 : 8}
                 strokeLinecap="round"
-                className="transition-[stroke] duration-300"
-                style={st === "occupied" ? { filter: "url(#glow)" } : undefined}
               />
               {/* 轨枕装饰 */}
               <text
@@ -126,7 +142,7 @@ export function StationYard() {
         ))}
 
         {/* 股道终端可点击区域 */}
-        {state.selectedSignal &&
+        {(state.selectedSignal || guideTargets.size > 0) &&
           TRACK_TARGETS.map((t) => (
             <rect
               key={t.id}
@@ -135,10 +151,10 @@ export function StationYard() {
               width={t.rect.w}
               height={t.rect.h}
               rx="4"
-              fill="rgba(56,189,248,0.12)"
-              stroke="rgba(56,189,248,0.6)"
+              fill={guideTargets.has(t.id) ? "rgba(52,211,153,0.16)" : "rgba(56,189,248,0.12)"}
+              stroke={guideTargets.has(t.id) ? "rgba(52,211,153,0.85)" : "rgba(56,189,248,0.6)"}
               strokeDasharray="4 3"
-              className="cursor-pointer"
+              className={guideTargets.has(t.id) ? "guide-target-pulse cursor-pointer animate-pulse" : "cursor-pointer"}
               onClick={() => dispatch({ type: "CLICK_TARGET", id: t.id })}
             >
               <title>选择终端：{t.label}</title>
@@ -152,6 +168,7 @@ export function StationYard() {
           const locked = state.switchLocked[sw.id]
           const blocked = state.switchBlocked[sw.id]
           const moving = state.movingSwitch === sw.id
+          const guided = guideSwitches.has(sw.id)
           return (
             <g
               key={sw.id}
@@ -159,6 +176,12 @@ export function StationYard() {
               onClick={() => dispatch({ type: "CLICK_SWITCH", id: sw.id })}
             >
               {/* 尖轨方向 */}
+              {guided && (
+                <g className="guide-click-ring animate-pulse">
+                  <circle cx={sw.pivot.x} cy={sw.pivot.y} r="28" fill="rgba(52,211,153,0.2)" stroke="#34d399" strokeWidth="3" />
+                  <circle cx={sw.pivot.x} cy={sw.pivot.y} r="36" fill="none" stroke="#a7f3d0" strokeWidth="1.5" strokeDasharray="5 5" />
+                </g>
+              )}
               <line
                 x1={sw.pivot.x}
                 y1={sw.pivot.y}
@@ -203,6 +226,7 @@ export function StationYard() {
             sig={sig}
             aspect={state.aspects[sig.id]}
             wireBroken={state.signalWireBroken[sig.id]}
+            guided={guideSignals.has(sig.id)}
             selected={state.selectedSignal === sig.id}
             onClick={() => dispatch({ type: "CLICK_SIGNAL", id: sig.id })}
           />
@@ -219,12 +243,14 @@ function SignalMast({
   sig,
   aspect,
   wireBroken,
+  guided,
   selected,
   onClick,
 }: {
   sig: SignalDef
   aspect: Aspect
   wireBroken: boolean
+  guided: boolean
   selected: boolean
   onClick: () => void
 }) {
@@ -235,6 +261,12 @@ function SignalMast({
   const headStart = sig.pos.x + dir * 14
   return (
     <g className="cursor-pointer" onClick={onClick}>
+      {guided && (
+        <g className="guide-click-ring animate-pulse">
+          <circle cx={sig.pos.x} cy={sig.pos.y} r="28" fill="rgba(52,211,153,0.2)" stroke="#34d399" strokeWidth="3" />
+          <circle cx={sig.pos.x} cy={sig.pos.y} r="36" fill="none" stroke="#a7f3d0" strokeWidth="1.5" strokeDasharray="5 5" />
+        </g>
+      )}
       {selected && (
         <circle cx={sig.pos.x} cy={sig.pos.y} r="20" fill="none" stroke="#fbbf24" strokeWidth="2" className="animate-pulse" />
       )}

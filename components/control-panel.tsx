@@ -1,10 +1,18 @@
 "use client"
 
+import { useState } from "react"
 import { useInterlocking, type OpMode } from "./interlocking-provider"
+import { TutorialPanel } from "./tutorial-panel"
 import { cn } from "@/lib/utils"
+import { VALIDATION_GUIDE_STEPS } from "@/lib/validation-guide"
 
 export function ControlPanel() {
   const { state, dispatch } = useInterlocking()
+  const [tutorialOpen, setTutorialOpen] = useState(false)
+  const guideStep = state.validationGuide.active ? VALIDATION_GUIDE_STEPS[state.validationGuide.step] : null
+  const guidePassed = guideStep ? !!state.validationGuide.passed[state.validationGuide.step] : false
+  const guideButtons = guideStep?.buttonLabels ?? []
+  const guideButtonClass = "animate-pulse border-emerald-300 bg-emerald-400/18 text-emerald-100 shadow-[0_0_0_2px_rgba(52,211,153,0.45),0_0_22px_rgba(52,211,153,0.3)]"
 
   const systemBtns: { label: string; action: () => void; tone?: "danger" | "warn" }[] = [
     { label: "总取消", action: () => dispatch({ type: "TOTAL_CANCEL" }) },
@@ -30,6 +38,7 @@ export function ControlPanel() {
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto rounded-md border border-cyan-400/20 bg-[#081827] p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.8)]">
+      <TutorialPanel open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
       {/* 进路 / 模式 */}
       <Panel title="操作模式">
         <div className="grid grid-cols-1 gap-2">
@@ -39,10 +48,99 @@ export function ControlPanel() {
         </div>
         <button
           onClick={() => dispatch({ type: "RUN_TRAIN" })}
-          className="mt-1 w-full rounded bg-cyan-400 py-3 text-sm font-bold text-[#06121f] shadow-[0_0_18px_rgba(34,211,238,0.32)] transition-all hover:bg-cyan-300 active:scale-[0.98]"
+          className={cn(
+            "mt-1 w-full rounded bg-cyan-400 py-3 text-sm font-bold text-[#06121f] shadow-[0_0_18px_rgba(34,211,238,0.32)] transition-all hover:bg-cyan-300 active:scale-[0.98]",
+            guideButtons.includes("▶ 模拟列车运行") && guideButtonClass,
+          )}
         >
           ▶ 模拟列车运行
         </button>
+      </Panel>
+
+      {/* 教程 */}
+      <Panel title="演示教程">
+        <button
+          onClick={() => setTutorialOpen(true)}
+          className="w-full rounded border border-emerald-300/45 bg-emerald-400/12 px-2 py-2.5 text-sm font-semibold text-emerald-100 transition-all hover:bg-emerald-400/20 active:scale-[0.98]"
+        >
+          功能验收教程
+        </button>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          按评分项查看演示步骤和观察要点
+        </p>
+      </Panel>
+
+      {/* 验收引导模式 */}
+      <Panel title="验收引导模式">
+        {!guideStep ? (
+          <button
+            onClick={() => dispatch({ type: "GUIDE_START" })}
+            className="w-full rounded border border-cyan-300/45 bg-cyan-400/12 px-2 py-2.5 text-sm font-semibold text-cyan-100 transition-all hover:bg-cyan-400/20 active:scale-[0.98]"
+          >
+            开始验收引导
+          </button>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <div className="rounded border border-emerald-300/35 bg-emerald-400/10 p-2">
+              <div className="flex items-center justify-between gap-2 font-mono text-[11px] text-emerald-200">
+                <span>
+                  {state.validationGuide.step + 1}/{VALIDATION_GUIDE_STEPS.length}
+                </span>
+                <span>{guideStep.score}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-50">{guideStep.title}</p>
+                <span
+                  className={cn(
+                    "shrink-0 rounded border px-2 py-0.5 text-[11px] font-bold",
+                    guidePassed
+                      ? "border-emerald-300/55 bg-emerald-300/20 text-emerald-100"
+                      : "border-amber-300/45 bg-amber-300/12 text-amber-100",
+                  )}
+                >
+                  {guidePassed ? "演示成功" : "等待演示"}
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-amber-100">准备：{guideStep.prepare}</p>
+              <p className="mt-1 text-xs leading-relaxed text-cyan-100">点击：{guideStep.click}</p>
+              <p className="mt-1 text-xs leading-relaxed text-emerald-100">观察：{guideStep.observe}</p>
+              {guidePassed && (
+                <p className="mt-1 rounded border border-emerald-300/35 bg-emerald-300/12 px-2 py-1 text-xs font-semibold text-emerald-100">
+                  本项已满足验收条件，可以继续下一项。
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => dispatch({ type: "GUIDE_PREPARE" })}
+              className="rounded border border-amber-300/50 bg-amber-300/14 px-2 py-2 text-xs font-semibold text-amber-100 shadow-[0_0_0_1px_rgba(251,191,36,0.18)] hover:bg-amber-300/22"
+            >
+              准备本项
+            </button>
+            <p className="text-[11px] leading-relaxed text-slate-300">
+              建议每项演示前先点一次，系统会清除上一项留下的进路、占用、锁闭、封锁、断丝和倒计时。
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => dispatch({ type: "GUIDE_PREV" })}
+                className="rounded border border-slate-500/40 bg-slate-950/55 px-2 py-2 text-xs font-semibold text-slate-100 hover:border-cyan-300/45"
+              >
+                上一项
+              </button>
+              <button
+                onClick={() => dispatch({ type: "GUIDE_NEXT" })}
+                className="rounded border border-cyan-300/45 bg-cyan-400/12 px-2 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-400/20"
+              >
+                下一项
+              </button>
+              <button
+                onClick={() => dispatch({ type: "GUIDE_STOP" })}
+                className="rounded border border-red-400/40 bg-red-500/10 px-2 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/18"
+              >
+                退出
+              </button>
+            </div>
+          </div>
+        )}
       </Panel>
 
       {/* 系统级按钮 */}
@@ -54,6 +152,7 @@ export function ControlPanel() {
               onClick={b.action}
               className={cn(
                 "rounded border px-2 py-2.5 text-sm font-semibold transition-all active:scale-[0.97]",
+                guideButtons.includes(b.label) && guideButtonClass,
                 b.tone === "danger"
                   ? "border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20"
                   : b.tone === "warn"
@@ -71,7 +170,7 @@ export function ControlPanel() {
       <Panel title="道岔操作（选模式后点击道岔）">
         <div className="grid grid-cols-3 gap-2">
           {switchModes.map((m) => (
-            <ModeBtn key={m.mode} active={state.opMode === m.mode} onClick={() => dispatch({ type: "SET_MODE", mode: m.mode })}>
+            <ModeBtn key={m.mode} active={state.opMode === m.mode} guide={guideButtons.includes(m.label)} onClick={() => dispatch({ type: "SET_MODE", mode: m.mode })}>
               {m.label}
             </ModeBtn>
           ))}
@@ -85,7 +184,7 @@ export function ControlPanel() {
       <Panel title="信号设备仿真（选模式后点击信号机）">
         <div className="grid grid-cols-2 gap-2">
           {signalModes.map((m) => (
-            <ModeBtn key={m.mode} active={state.opMode === m.mode} onClick={() => dispatch({ type: "SET_MODE", mode: m.mode })}>
+            <ModeBtn key={m.mode} active={state.opMode === m.mode} guide={guideButtons.includes(m.label)} onClick={() => dispatch({ type: "SET_MODE", mode: m.mode })}>
               {m.label}
             </ModeBtn>
           ))}
@@ -135,10 +234,12 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 function ModeBtn({
   active,
+  guide,
   onClick,
   children,
 }: {
   active: boolean
+  guide?: boolean
   onClick: () => void
   children: React.ReactNode
 }) {
@@ -147,6 +248,7 @@ function ModeBtn({
       onClick={onClick}
       className={cn(
         "rounded border px-2 py-2 text-sm font-semibold transition-all active:scale-[0.97]",
+        guide && "border-emerald-300 bg-emerald-400/18 text-emerald-100 shadow-[0_0_0_2px_rgba(52,211,153,0.45)]",
         active
           ? "border-cyan-300 bg-cyan-400/18 text-cyan-100 shadow-[0_0_0_1px_rgba(34,211,238,0.35)]"
           : "border-slate-500/35 bg-slate-950/55 text-slate-100 hover:border-cyan-300/45 hover:bg-slate-800",
