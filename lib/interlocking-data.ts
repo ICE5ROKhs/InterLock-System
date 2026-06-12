@@ -145,13 +145,37 @@ export const SEGMENTS: SegmentDef[] = [
     labelPos: { x: 475, y: 116 },
   },
   {
-    id: "IIG",
+    // 股道 II 左侧咽喉区段：1 号道岔 → 信号机 SII
+    id: "IIG_left",
     label: "IIG",
+    displayName: "IIG",
     path: [
       { x: 240, y: 210 },
+      { x: 360, y: 210 },
+    ],
+    labelPos: { x: 300, y: 196 },
+  },
+  {
+    // 股道 II 站内区段：信号机 SII → 信号机 XII（列车停靠段）
+    id: "IIG",
+    label: "IIG",
+    displayName: "IIG",
+    path: [
+      { x: 360, y: 210 },
+      { x: 770, y: 210 },
+    ],
+    labelPos: { x: 565, y: 196 },
+  },
+  {
+    // 股道 II 右侧咽喉区段：信号机 XII → 2 号道岔
+    id: "IIG_right",
+    label: "IIG",
+    displayName: "IIG",
+    path: [
+      { x: 770, y: 210 },
       { x: 920, y: 210 },
     ],
-    labelPos: { x: 460, y: 196 },
+    labelPos: { x: 845, y: 196 },
   },
   {
     id: "IG",
@@ -290,7 +314,8 @@ export const SIGNALS: SignalDef[] = [
 // 股道点选目标（点信号机后，可点这些区域作为终端）
 export const TRACK_TARGETS: { id: string; label: string; rect: { x: number; y: number; w: number; h: number } }[] = [
   { id: "IIIG", label: "3 道", rect: { x: 300, y: 118, w: 460, h: 24 } },
-  { id: "IIG", label: "II 道", rect: { x: 240, y: 198, w: 680, h: 24 } },
+  // II 道可点选区域限制在 SII–XII 之间（股道站内有效区段）
+  { id: "IIG", label: "II 道", rect: { x: 360, y: 198, w: 410, h: 24 } },
   { id: "IG", label: "I 道", rect: { x: 360, y: 278, w: 400, h: 24 } },
 ]
 
@@ -306,8 +331,10 @@ const P = {
   w5: { x: 330, y: 290 },
   w2: { x: 920, y: 210 },
   w4: { x: 840, y: 210 },
+  SII: { x: 360, y: 210 },   // 左侧出站信号机 SII（股道 II 左端防护）
+  XII: { x: 770, y: 210 },   // 右侧出站信号机 XII（股道 II 右端防护）
   IIIGmid: { x: 560, y: 130 },
-  IImid: { x: 560, y: 210 },
+  IImid: { x: 565, y: 210 }, // 更新为 SII–XII 中点
   IGmid: { x: 560, y: 290 },
   IIIGleft: { x: 300, y: 130 },
   IIIGright: { x: 760, y: 130 },
@@ -323,13 +350,14 @@ export const ROUTES: RouteDef[] = [
     to: "IIG",
     kind: "train",
     name: "X → II 道 接车进路（正线）",
-    segments: ["IIAG_2", "1AG", "IIG"],
+    segments: ["IIAG_2", "1AG", "IIG_left", "IIG"],
     switches: [
       { id: "W1", pos: "normal" },
       { id: "W3", pos: "normal" },
     ],
     aspect: "green",
-    trainPath: [P.leftEntry, P.iiag1End, P.iiag2End, P.w1, P.w3, P.IImid],
+    // 黄色锁闭光带在 XII 处终止，不进入 IIG_right
+    trainPath: [P.leftEntry, P.iiag1End, P.iiag2End, P.w1, P.w3, P.SII, P.XII],
   },
   {
     id: "X-IG",
@@ -364,7 +392,7 @@ export const ROUTES: RouteDef[] = [
     to: "S",
     kind: "train",
     name: "X → S 下行通过进路",
-    segments: ["IIAG_2", "1AG", "IIG", "2AG"],
+    segments: ["IIAG_2", "1AG", "IIG_left", "IIG", "IIG_right", "2AG"],
     switches: [
       { id: "W1", pos: "normal" },
       { id: "W3", pos: "normal" },
@@ -372,7 +400,7 @@ export const ROUTES: RouteDef[] = [
       { id: "W2", pos: "normal" },
     ],
     aspect: "green",
-    trainPath: [P.leftEntry, P.iiag1End, P.iiag2End, P.w1, P.w3, P.IImid, P.w4, P.w2, P.rightEntry],
+    trainPath: [P.leftEntry, P.iiag1End, P.iiag2End, P.w1, P.w3, P.SII, P.XII, P.w4, P.w2, P.rightEntry],
   },
   // ---------- 上行接车 (S 进站 -> 股道) ----------
   {
@@ -381,14 +409,15 @@ export const ROUTES: RouteDef[] = [
     to: "IIG",
     kind: "train",
     name: "S → II 道 接车进路（正线）",
-    segments: ["2AG", "IIG"],
+    segments: ["2AG", "IIG_right", "IIG"],
     switches: [
       { id: "W2", pos: "normal" },
       { id: "W4", pos: "normal" },
       { id: "W3", pos: "normal" },
     ],
     aspect: "green",
-    trainPath: [P.rightEntry, P.w2, P.w4, P.IImid, P.w3],
+    // 黄色锁闭光带在 SII 处终止，不进入 IIG_left
+    trainPath: [P.rightEntry, P.w2, P.w4, P.XII, P.SII],
   },
   {
     id: "S-IG",
@@ -423,7 +452,7 @@ export const ROUTES: RouteDef[] = [
     to: "X",
     kind: "train",
     name: "S → X 上行通过进路",
-    segments: ["2AG", "IIG", "1AG", "IIAG_2"],
+    segments: ["2AG", "IIG_right", "IIG", "IIG_left", "1AG", "IIAG_2"],
     switches: [
       { id: "W2", pos: "normal" },
       { id: "W4", pos: "normal" },
@@ -431,7 +460,7 @@ export const ROUTES: RouteDef[] = [
       { id: "W1", pos: "normal" },
     ],
     aspect: "green",
-    trainPath: [P.rightEntry, P.w2, P.w4, P.IImid, P.w3, P.w1, P.leftEntry],
+    trainPath: [P.rightEntry, P.w2, P.w4, P.XII, P.SII, P.w3, P.w1, P.leftEntry],
   },
   // ---------- 右行发车 (左侧 S 系出站 -> IIBG) ----------
   {
@@ -440,13 +469,13 @@ export const ROUTES: RouteDef[] = [
     to: "S",
     kind: "train",
     name: "SⅡ → 上行区间 发车进路",
-    segments: ["IIG", "2AG"],
+    segments: ["IIG", "IIG_right", "2AG"],
     switches: [
       { id: "W4", pos: "normal" },
       { id: "W2", pos: "normal" },
     ],
     aspect: "green",
-    trainPath: [P.IImid, P.w4, P.w2, P.rightEntry],
+    trainPath: [P.SII, P.XII, P.w4, P.w2, P.rightEntry],
   },
   {
     id: "S1-out",
@@ -482,13 +511,13 @@ export const ROUTES: RouteDef[] = [
     to: "X",
     kind: "train",
     name: "XⅡ → 下行区间 发车进路",
-    segments: ["IIG", "1AG", "IIAG_2"],
+    segments: ["IIG", "IIG_left", "1AG", "IIAG_2"],
     switches: [
       { id: "W1", pos: "normal" },
       { id: "W3", pos: "normal" },
     ],
     aspect: "green",
-    trainPath: [P.IImid, P.w3, P.w1, P.leftEntry],
+    trainPath: [P.XII, P.SII, P.w3, P.w1, P.leftEntry],
   },
   {
     id: "X1-out",
@@ -524,13 +553,13 @@ export const ROUTES: RouteDef[] = [
     to: "IIG",
     kind: "shunt",
     name: "D1 → II 道 调车进路",
-    segments: ["1AG", "IIG"],
+    segments: ["1AG", "IIG_left", "IIG"],
     switches: [
       { id: "W1", pos: "normal" },
       { id: "W3", pos: "normal" },
     ],
     aspect: "white",
-    trainPath: [{ x: 180, y: 210 }, P.w1, P.w3, P.IImid],
+    trainPath: [{ x: 180, y: 210 }, P.w1, P.w3, P.SII, P.XII],
   },
   {
     id: "D1-IG",
@@ -565,14 +594,14 @@ export const ROUTES: RouteDef[] = [
     to: "IIG",
     kind: "shunt",
     name: "D2 → II 道 调车进路",
-    segments: ["2AG", "IIG"],
+    segments: ["2AG", "IIG_right", "IIG"],
     switches: [
       { id: "W2", pos: "normal" },
       { id: "W4", pos: "normal" },
       { id: "W3", pos: "normal" },
     ],
     aspect: "white",
-    trainPath: [{ x: 990, y: 210 }, P.w2, P.w4, P.IImid, P.w3],
+    trainPath: [{ x: 990, y: 210 }, P.w2, P.w4, P.XII, P.SII],
   },
   {
     id: "D2-IG",
