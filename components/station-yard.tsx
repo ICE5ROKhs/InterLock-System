@@ -11,6 +11,7 @@ import {
   ROUTES,
   SIGNAL_COLORS,
   pointAt,
+  groupSegmentsByDisplayName,
   type Aspect,
   type SignalDef,
 } from "@/lib/interlocking-data"
@@ -61,6 +62,9 @@ export function StationYard() {
       <div className="pointer-events-none absolute bottom-3 right-4 z-10 rounded border border-slate-500/25 bg-[#081827]/85 px-2.5 py-1 font-mono text-[11px] text-slate-300">
         灰=空闲 黄=锁闭 红=占用
       </div>
+      <div className="pointer-events-none absolute bottom-3 left-4 z-10 rounded border border-cyan-400/20 bg-[#081827]/85 px-2.5 py-1 font-mono text-[11px] text-cyan-200/80">
+        Ctrl+点击区段 切换占用状态
+      </div>
       {state.selectedSignal && (
         <div className="pointer-events-none absolute right-4 top-3 z-10 animate-pulse rounded border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 font-mono text-xs text-amber-200">
           已选始端：{SIGNALS.find((s) => s.id === state.selectedSignal)?.label} — 请点击终端
@@ -102,7 +106,16 @@ export function StationYard() {
           const color = SEG_COLOR[st]
           const guided = guideSegments.has(seg.id)
           return (
-            <g key={seg.id}>
+            <g
+              key={seg.id}
+              className="cursor-pointer"
+              onClick={(e) => {
+                if (e.ctrlKey || e.metaKey) {
+                  dispatch({ type: "TOGGLE_SEGMENT_OCCUPATION", id: seg.id })
+                }
+              }}
+            >
+              <title>Ctrl + 点击切换占用状态（红/灰）</title>
               {guided && (
                 <polyline
                   points={seg.path.map((p) => `${p.x},${p.y}`).join(" ")}
@@ -114,25 +127,68 @@ export function StationYard() {
                   className="guide-target-pulse animate-pulse"
                 />
               )}
+              {/* 透明宽点击热区（便于点中细线） */}
+              <polyline
+                points={seg.path.map((p) => `${p.x},${p.y}`).join(" ")}
+                fill="none"
+                stroke="transparent"
+                strokeWidth="30"
+                strokeLinecap="round"
+              />
               <polyline
                 points={seg.path.map((p) => `${p.x},${p.y}`).join(" ")}
                 fill="none"
                 stroke={color}
                 strokeWidth={st === "occupied" ? 10 : 8}
                 strokeLinecap="round"
+                style={{ pointerEvents: "none" }}
               />
               {/* 轨枕装饰 */}
+            </g>
+          )
+        })}
+
+        {/* 合并 displayName 标注（如 IIAG 三段合标） */}
+        {groupSegmentsByDisplayName(SEGMENTS).map((g) => {
+          // 单段区段仍用原 labelPos 定位
+          if (g.segments.length === 1) {
+            const seg = g.segments[0]
+            return (
               <text
+                key={`label-${seg.id}`}
                 x={seg.labelPos.x}
                 y={seg.labelPos.y}
                 textAnchor="middle"
                 className="font-mono"
                 fontSize="13"
-                fill={st === "free" ? "#cbd5e1" : color}
+                fill={state.segs[seg.id] === "free" ? "#cbd5e1" : SEG_COLOR[state.segs[seg.id]]}
+                style={{ pointerEvents: "none" }}
               >
-                {seg.label}
+                {g.displayName}
               </text>
-            </g>
+            )
+          }
+          // 多段合并：按组内所有区段的最紧迫状态取色
+          // occupied（红）> locked（黄）> free（灰）
+          const groupColor = (() => {
+            const states = g.segments.map((s) => state.segs[s.id] ?? "free")
+            if (states.includes("occupied")) return SEG_COLOR.occupied
+            if (states.includes("locked")) return SEG_COLOR.locked
+            return "#cbd5e1"
+          })()
+          return (
+            <text
+              key={`label-group-${g.displayName}`}
+              x={g.center.x}
+              y={g.center.y}
+              textAnchor="middle"
+              className="font-mono"
+              fontSize="13"
+              fill={groupColor}
+              style={{ pointerEvents: "none" }}
+            >
+              {g.displayName}
+            </text>
           )
         })}
 
@@ -228,6 +284,7 @@ export function StationYard() {
             wireBroken={state.signalWireBroken[sig.id]}
             guided={guideSignals.has(sig.id)}
             selected={state.selectedSignal === sig.id}
+            opMode={state.opMode}
             onClick={() => dispatch({ type: "CLICK_SIGNAL", id: sig.id })}
           />
         ))}
@@ -245,6 +302,7 @@ function SignalMast({
   wireBroken,
   guided,
   selected,
+  opMode,
   onClick,
 }: {
   sig: SignalDef
@@ -252,6 +310,7 @@ function SignalMast({
   wireBroken: boolean
   guided: boolean
   selected: boolean
+  opMode: string
   onClick: () => void
 }) {
   const lamps = wireBroken ? [SIGNAL_COLORS.off] : aspectLamps(aspect)
@@ -269,6 +328,23 @@ function SignalMast({
       )}
       {selected && (
         <circle cx={sig.pos.x} cy={sig.pos.y} r="20" fill="none" stroke="#fbbf24" strokeWidth="2" className="animate-pulse" />
+      )}
+      {/* 总取消 / 总人解 模式视觉反馈 */}
+      {opMode === "total-cancel" && (
+        <g>
+          <circle cx={sig.pos.x} cy={sig.pos.y} r="22" fill="rgba(239,68,68,0.15)" stroke="#ef4444" strokeWidth="2.5" className="animate-pulse" />
+          <text x={sig.pos.x} y={sig.pos.y + 36} textAnchor="middle" fontSize="10" fill="#fca5a5" fontWeight="bold">
+            取消目标
+          </text>
+        </g>
+      )}
+      {opMode === "manual-unlock" && (
+        <g>
+          <circle cx={sig.pos.x} cy={sig.pos.y} r="22" fill="rgba(251,191,36,0.15)" stroke="#fbbf24" strokeWidth="2.5" className="animate-pulse" />
+          <text x={sig.pos.x} y={sig.pos.y + 36} textAnchor="middle" fontSize="10" fill="#fde68a" fontWeight="bold">
+            解锁目标
+          </text>
+        </g>
       )}
       {/* 基座立柱 */}
       <line x1={sig.pos.x} y1={sig.pos.y} x2={sig.pos.x} y2={sig.pos.y + (small ? 12 : 16)} stroke="#94a3b8" strokeWidth="2.5" />

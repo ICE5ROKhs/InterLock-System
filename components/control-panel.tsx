@@ -46,14 +46,32 @@ export function ControlPanel() {
             进路操作（点选始端→终端）
           </ModeBtn>
         </div>
+        {/* Simulation control: start / pause / resume */}
         <button
-          onClick={() => dispatch({ type: "RUN_TRAIN" })}
+          onClick={() => {
+            if (!state.train) dispatch({ type: "RUN_TRAIN" })
+            else dispatch({ type: "TOGGLE_PAUSE" })
+          }}
           className={cn(
-            "mt-1 w-full rounded bg-cyan-400 py-3 text-sm font-bold text-[#06121f] shadow-[0_0_18px_rgba(34,211,238,0.32)] transition-all hover:bg-cyan-300 active:scale-[0.98]",
+            "mt-1 w-full rounded py-3 text-sm font-bold transition-all active:scale-[0.98]",
+            // running
+            state.train && !state.paused
+              ? "bg-amber-400 text-[#06121f] shadow-[0_0_18px_rgba(250,204,21,0.25)] hover:bg-amber-300"
+              : // paused
+              state.train && state.paused
+              ? "bg-emerald-400 text-[#06121f] shadow-[0_0_18px_rgba(52,211,153,0.25)] hover:bg-emerald-300"
+              : // idle
+                "bg-cyan-400 text-[#06121f] shadow-[0_0_18px_rgba(34,211,238,0.32)] hover:bg-cyan-300",
             guideButtons.includes("▶ 模拟列车运行") && guideButtonClass,
           )}
         >
-          ▶ 模拟列车运行
+          {!state.train ? (
+            <>▶ 模拟列车运行</>
+          ) : state.paused ? (
+            <>▶ 继续运行</>
+          ) : (
+            <>⏸ 暂停模拟</>
+          )}
         </button>
       </Panel>
 
@@ -153,11 +171,17 @@ export function ControlPanel() {
               className={cn(
                 "rounded border px-2 py-2.5 text-sm font-semibold transition-all active:scale-[0.97]",
                 guideButtons.includes(b.label) && guideButtonClass,
-                b.tone === "danger"
-                  ? "border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20"
-                  : b.tone === "warn"
-                    ? "border-amber-400/45 bg-amber-400/10 text-amber-200 hover:bg-amber-400/18"
-                    : "border-slate-500/35 bg-slate-900/70 text-slate-100 hover:border-cyan-300/45 hover:bg-slate-800",
+                // 总取消按钮：当处于 total-cancel 模式时高亮
+                b.label === "总取消" && state.opMode === "total-cancel"
+                  ? "border-red-400 bg-red-500/30 text-red-100 shadow-[0_0_14px_rgba(239,68,68,0.35)]"
+                  : // 总人解按钮：当处于 manual-unlock 模式时高亮
+                  b.label === "总人解" && state.opMode === "manual-unlock"
+                    ? "border-amber-300 bg-amber-400/30 text-amber-50 shadow-[0_0_14px_rgba(251,191,36,0.35)]"
+                    : b.tone === "danger"
+                      ? "border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20"
+                      : b.tone === "warn"
+                        ? "border-amber-400/45 bg-amber-400/10 text-amber-200 hover:bg-amber-400/18"
+                        : "border-slate-500/35 bg-slate-900/70 text-slate-100 hover:border-cyan-300/45 hover:bg-slate-800",
               )}
             >
               {b.label}

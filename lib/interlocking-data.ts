@@ -50,6 +50,8 @@ export interface SwitchDef {
 export interface SegmentDef {
   id: string
   label: string
+  /** 界面显示名称，默认为 label。多个相邻区段可共用同一 displayName 以合并标注。 */
+  displayName?: string
   // 折线，用于绘制轨道
   path: Point[]
   labelPos: Point
@@ -79,22 +81,59 @@ export interface OutdoorEquipmentDef {
 // ----------------------- 轨道区段 -----------------------
 export const SEGMENTS: SegmentDef[] = [
   {
-    id: "1AG",
-    label: "IIAG",
+    // 接近区段 1：JXG 至信号机 X（X 进路的站外接近轨道）
+    id: "IIAG_1",
+    label: "IIAG₁",
+    displayName: "IIAG",
     path: [
-      { x: 60, y: 210 },
-      { x: 240, y: 210 },
+      { x: 28, y: 210 },
+      { x: 100, y: 210 },
     ],
-    labelPos: { x: 145, y: 236 },
+    labelPos: { x: 64, y: 236 },
   },
   {
+    // 接近区段 2：信号机 X 至信号机 D1（D1 调车进路的接近轨道）
+    id: "IIAG_2",
+    label: "IIAG₂",
+    displayName: "IIAG",
+    path: [
+      { x: 100, y: 210 },
+      { x: 180, y: 210 },
+    ],
+    labelPos: { x: 140, y: 236 },
+  },
+  {
+    // 进路首区段：信号机 D1 至 1 号道岔
+    id: "1AG",
+    label: "1AG",
+    displayName: "IIAG",
+    path: [
+      { x: 180, y: 210 },
+      { x: 240, y: 210 },
+    ],
+    labelPos: { x: 210, y: 236 },
+  },
+  {
+    // 进路首区段：2 号道岔至信号机 S
     id: "2AG",
-    label: "IIBG",
+    label: "2AG",
+    displayName: "IIBG",
     path: [
       { x: 920, y: 210 },
-      { x: 1140, y: 210 },
+      { x: 1080, y: 210 },
     ],
-    labelPos: { x: 1038, y: 184 },
+    labelPos: { x: 1000, y: 184 },
+  },
+  {
+    // 接近区段：信号机 S 至 JSG（站外接近轨道）
+    id: "IIBG",
+    label: "IIBG",
+    displayName: "IIBG",
+    path: [
+      { x: 1080, y: 210 },
+      { x: 1174, y: 210 },
+    ],
+    labelPos: { x: 1127, y: 184 },
   },
   {
     id: "IIIG",
@@ -166,11 +205,11 @@ export const THROAT_LINKS: Point[][] = [
     { x: 760, y: 290 },
     { x: 920, y: 210 },
   ],
-  // 右侧出站区间
+  // 右侧出站区间（W2 → 信号机 S）
   [
     { x: 920, y: 210 },
-    { x: 1140, y: 210 },
-  ], // W2 -> IIBG
+    { x: 1080, y: 210 },
+  ],
 ]
 
 // ----------------------- 室外辅助设备/边界标识 -----------------------
@@ -233,8 +272,8 @@ export const SWITCHES: SwitchDef[] = [
 // ----------------------- 信号机 -----------------------
 export const SIGNALS: SignalDef[] = [
   // 进站信号机
-  { id: "X", label: "X", kind: "entry", pos: { x: 76, y: 190 }, facing: "right", defaultAspect: "red" },
-  { id: "S", label: "S", kind: "entry", pos: { x: 1108, y: 210 }, facing: "left", defaultAspect: "red" },
+  { id: "X", label: "X", kind: "entry", pos: { x: 100, y: 190 }, facing: "right", defaultAspect: "red" },
+  { id: "S", label: "S", kind: "entry", pos: { x: 1080, y: 210 }, facing: "left", defaultAspect: "red" },
   // 左侧出站信号机（S 系）
   { id: "S3", label: "S3", kind: "exit", pos: { x: 360, y: 145 }, facing: "left", defaultAspect: "red" },
   { id: "SII", label: "SII", kind: "exit", pos: { x: 360, y: 225 }, facing: "left", defaultAspect: "red" },
@@ -244,7 +283,7 @@ export const SIGNALS: SignalDef[] = [
   { id: "XII", label: "XII", kind: "exit", pos: { x: 770, y: 190 }, facing: "right", defaultAspect: "red" },
   { id: "X1", label: "X1", kind: "exit", pos: { x: 770, y: 270 }, facing: "right", defaultAspect: "red" },
   // 调车信号机
-  { id: "D1", label: "D1", kind: "shunt", pos: { x: 150, y: 190 }, facing: "right", defaultAspect: "blue" },
+  { id: "D1", label: "D1", kind: "shunt", pos: { x: 180, y: 190 }, facing: "right", defaultAspect: "blue" },
   { id: "D2", label: "D2", kind: "shunt", pos: { x: 990, y: 225 }, facing: "left", defaultAspect: "blue" },
 ]
 
@@ -257,8 +296,11 @@ export const TRACK_TARGETS: { id: string; label: string; rect: { x: number; y: n
 
 // ----------------------- 进路表 -----------------------
 const P = {
-  leftEntry: { x: 60, y: 210 },
-  rightEntry: { x: 1140, y: 210 },
+  leftEntry: { x: 28, y: 210 },
+  rightEntry: { x: 1174, y: 210 },
+  // 接近区段关键坐标（确保列车路径经过 IIAG_1 / IIAG_2）
+  iiag1End: { x: 100, y: 210 },   // IIAG_1 终点 / 信号机 X 轨道位置
+  iiag2End: { x: 180, y: 210 },   // IIAG_2 终点 / 信号机 D1 轨道位置
   w1: { x: 240, y: 210 },
   w3: { x: 300, y: 210 },
   w5: { x: 330, y: 290 },
@@ -281,13 +323,13 @@ export const ROUTES: RouteDef[] = [
     to: "IIG",
     kind: "train",
     name: "X → II 道 接车进路（正线）",
-    segments: ["1AG", "IIG"],
+    segments: ["IIAG_2", "1AG", "IIG"],
     switches: [
       { id: "W1", pos: "normal" },
       { id: "W3", pos: "normal" },
     ],
     aspect: "green",
-    trainPath: [P.leftEntry, P.w1, P.w3, P.IImid],
+    trainPath: [P.leftEntry, P.iiag1End, P.iiag2End, P.w1, P.w3, P.IImid],
   },
   {
     id: "X-IG",
@@ -295,13 +337,13 @@ export const ROUTES: RouteDef[] = [
     to: "IG",
     kind: "train",
     name: "X → I 道 接车进路（侧线）",
-    segments: ["1AG", "IG"],
+    segments: ["IIAG_2", "1AG", "IG"],
     switches: [
       { id: "W1", pos: "normal" },
       { id: "W3", pos: "reverse" },
     ],
     aspect: "yellow",
-    trainPath: [P.leftEntry, P.w1, P.w3, P.IGleft, P.IGmid],
+    trainPath: [P.leftEntry, P.iiag1End, P.iiag2End, P.w1, P.w3, P.IGleft, P.IGmid],
   },
   {
     id: "X-IIIG",
@@ -309,12 +351,12 @@ export const ROUTES: RouteDef[] = [
     to: "IIIG",
     kind: "train",
     name: "X → 3 道 接车进路（侧线）",
-    segments: ["1AG", "IIIG"],
+    segments: ["IIAG_2", "1AG", "IIIG"],
     switches: [
       { id: "W1", pos: "reverse" },
     ],
     aspect: "yellow",
-    trainPath: [P.leftEntry, P.w1, P.IIIGleft, P.IIIGmid],
+    trainPath: [P.leftEntry, P.iiag1End, P.iiag2End, P.w1, P.IIIGleft, P.IIIGmid],
   },
   {
     id: "X-through",
@@ -322,7 +364,7 @@ export const ROUTES: RouteDef[] = [
     to: "S",
     kind: "train",
     name: "X → S 下行通过进路",
-    segments: ["1AG", "IIG", "2AG"],
+    segments: ["IIAG_2", "1AG", "IIG", "2AG"],
     switches: [
       { id: "W1", pos: "normal" },
       { id: "W3", pos: "normal" },
@@ -330,7 +372,7 @@ export const ROUTES: RouteDef[] = [
       { id: "W2", pos: "normal" },
     ],
     aspect: "green",
-    trainPath: [P.leftEntry, P.w1, P.w3, P.IImid, P.w4, P.w2, P.rightEntry],
+    trainPath: [P.leftEntry, P.iiag1End, P.iiag2End, P.w1, P.w3, P.IImid, P.w4, P.w2, P.rightEntry],
   },
   // ---------- 上行接车 (S 进站 -> 股道) ----------
   {
@@ -381,7 +423,7 @@ export const ROUTES: RouteDef[] = [
     to: "X",
     kind: "train",
     name: "S → X 上行通过进路",
-    segments: ["2AG", "IIG", "1AG"],
+    segments: ["2AG", "IIG", "1AG", "IIAG_2"],
     switches: [
       { id: "W2", pos: "normal" },
       { id: "W4", pos: "normal" },
@@ -440,7 +482,7 @@ export const ROUTES: RouteDef[] = [
     to: "X",
     kind: "train",
     name: "XⅡ → 下行区间 发车进路",
-    segments: ["IIG", "1AG"],
+    segments: ["IIG", "1AG", "IIAG_2"],
     switches: [
       { id: "W1", pos: "normal" },
       { id: "W3", pos: "normal" },
@@ -454,7 +496,7 @@ export const ROUTES: RouteDef[] = [
     to: "X",
     kind: "train",
     name: "X1 → IIAG 发车进路",
-    segments: ["IG", "1AG"],
+    segments: ["IG", "1AG", "IIAG_2"],
     switches: [
       { id: "W3", pos: "reverse" },
       { id: "W1", pos: "normal" },
@@ -468,7 +510,7 @@ export const ROUTES: RouteDef[] = [
     to: "X",
     kind: "train",
     name: "X3 → IIAG 发车进路",
-    segments: ["IIIG", "1AG"],
+    segments: ["IIIG", "1AG", "IIAG_2"],
     switches: [
       { id: "W1", pos: "reverse" },
     ],
@@ -488,7 +530,7 @@ export const ROUTES: RouteDef[] = [
       { id: "W3", pos: "normal" },
     ],
     aspect: "white",
-    trainPath: [{ x: 150, y: 210 }, P.w1, P.w3, P.IImid],
+    trainPath: [{ x: 180, y: 210 }, P.w1, P.w3, P.IImid],
   },
   {
     id: "D1-IG",
@@ -565,9 +607,91 @@ export function findRoute(from: string, to: string): RouteDef | undefined {
   return ROUTES.find((r) => r.from === from && r.to === to)
 }
 
-export function routesFrom(from: string): RouteDef[] {
-  return ROUTES.filter((r) => r.from === from)
+// ----------------------- 接近区段映射 -----------------------
+// 信号机 → 站外接近区段（列车压入此区段时触发对应进路的接近锁闭）
+export const APPROACH_SECTIONS: Record<string, string> = {
+  X: "IIAG_1",  // 下行进站信号机 X 的接近区段（JXG → X）
+  D1: "IIAG_2", // 调车信号机 D1 的接近区段（X → D1）
+  S: "IIBG",    // 上行进站信号机 S 的接近区段（S → JSG）
 }
+
+/**
+ * 判定进路是否处于「接近锁闭」状态
+ * 条件：进路已建立 + 始端信号机对应的接近区段被占用
+ * 此函数为纯计算（从 segs 状态推导），不依赖任何缓存标记
+ */
+export function isApproachLocked(
+  fromSignalId: string,
+  segStates: Record<string, "free" | "locked" | "occupied">,
+): boolean {
+  const approachSeg = APPROACH_SECTIONS[fromSignalId]
+  if (!approachSeg) return false
+  return segStates[approachSeg] === "occupied"
+}
+
+/** displayName 分组：将相邻且 displayName 相同的区段聚为一组 */
+export interface DisplayNameGroup {
+  displayName: string
+  segments: SegmentDef[]
+  /** 整组的几何中心 */
+  center: Point
+}
+
+const _displayNameMap: Record<string, string> = {}
+for (const seg of SEGMENTS) {
+  _displayNameMap[seg.id] = seg.displayName ?? seg.label
+}
+
+/** 获取区段在界面上显示的友好名称（日志脱敏用） */
+export function getDisplayName(segId: string): string {
+  return _displayNameMap[segId] ?? segId
+}
+
+/** 将日志文本中所有已知区段 id 替换为 displayName */
+export function toDisplayText(text: string): string {
+  // 按 id 长度降序排列，避免短 id 误替子串（如 IG 被误替到 IIG 内部）
+  const ids = Object.keys(_displayNameMap).sort((a, b) => b.length - a.length)
+  for (const id of ids) {
+    const display = _displayNameMap[id]
+    if (display !== id) {
+      // 全局替换，但只替换完整 id（前后非字母数字下划线）
+      text = text.replace(new RegExp(id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), display)
+    }
+  }
+  return text
+}
+
+export function groupSegmentsByDisplayName(segs: SegmentDef[]): DisplayNameGroup[] {
+  const groups: DisplayNameGroup[] = []
+  let current: SegmentDef[] = []
+  let currentName: string | undefined
+
+  for (const seg of segs) {
+    const name = seg.displayName ?? seg.label
+    if (name !== currentName && current.length > 0) {
+      groups.push(calcGroup(current, currentName!))
+      current = []
+    }
+    currentName = name
+    current.push(seg)
+  }
+  if (current.length > 0) groups.push(calcGroup(current, currentName!))
+
+  return groups
+}
+
+function calcGroup(segs: SegmentDef[], name: string): DisplayNameGroup {
+  let minX = Infinity, maxX = -Infinity
+  const refY = segs[0].labelPos.y  // 用首段的 labelPos.y 作为垂直基准
+  for (const s of segs) {
+    for (const p of s.path) {
+      if (p.x < minX) minX = p.x
+      if (p.x > maxX) maxX = p.x
+    }
+  }
+  return { displayName: name, segments: segs, center: { x: (minX + maxX) / 2, y: refY } }
+}
+
 
 // 几何工具：计算折线总长
 export function pathLength(pts: Point[]): number {
